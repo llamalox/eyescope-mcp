@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "eyescope": {
+      "type": "stdio",
+      "command": "${PLUGIN_ROOT}/eyescope-mcp",
+      "args": [],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

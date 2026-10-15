@@ -1,0 +1,16 @@
+{
+  "name": "eyescope",
+  "version": "0.1.2",
+  "description": "Search and rough-cut an Eyescope library.",
+  "author": {
+    "name": "Eyescope",
+    "url": "https://eyescope.io"
+  },
+  "homepage": "https://eyescope.io",
+  "repository": "https://github.com/llamalox/eyescope-mcp",
+  "license": "MIT",
+  "keywords": ["video", "footage", "search", "rough-cut"],
+  "logo": "icon.png",
+  "requires_local_executor": true,
+  "mcpServers": "./.codex-mcp.json"
+}

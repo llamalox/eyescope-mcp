@@ -1,0 +1,53 @@
+#!/bin/sh
+# Bundled Eyescope MCP launcher. No extra runtime install.
+# Finds an interpreter the app already has, then proxies stdio.
+set -eu
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SCRIPT="$DIR/eyescope_mcp.py"
+
+python_from_record() {
+  file=$1
+  [ -f "$file" ] || return 1
+  sed -n 's/.*"python"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$file" | head -n 1
+}
+
+PY=""
+if [ -n "${EYESCOPE_PYTHON:-}" ] && [ -x "${EYESCOPE_PYTHON}" ]; then
+  PY=$EYESCOPE_PYTHON
+fi
+if [ -z "$PY" ] && [ -x "$DIR/../backend/.venv/bin/python" ]; then
+  PY=$DIR/../backend/.venv/bin/python
+fi
+if [ -z "$PY" ]; then
+  if [ -n "${EYESCOPE_DATA_DIR:-}" ]; then
+    found=$(python_from_record "$EYESCOPE_DATA_DIR/mcp-python.json" || true)
+    if [ -n "$found" ] && [ -x "$found" ]; then
+      PY=$found
+    fi
+  else
+    home=${HOME:-}
+    if [ "$(uname)" = "Darwin" ]; then
+      base="$home/Library/Application Support"
+    else
+      base=${XDG_CONFIG_HOME:-$home/.config}
+    fi
+    for name in eyescope-organizer-dev eyescope-organizer Eyescope; do
+      found=$(python_from_record "$base/$name/backend/mcp-python.json" || true)
+      if [ -n "$found" ] && [ -x "$found" ]; then
+        PY=$found
+        break
+      fi
+    done
+  fi
+fi
+if [ -z "$PY" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    PY=$(command -v python3)
+  fi
+fi
+if [ -z "$PY" ]; then
+  echo "Open Eyescope. The local engine is not running." >&2
+  printf '%s\n' '{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"Open Eyescope. The local engine is not running."}}'
+  exit 1
+fi
+exec "$PY" "$SCRIPT"

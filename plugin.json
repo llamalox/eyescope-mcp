@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "eyescope",
-  "version": "0.1.2",
-  "description": "Search and rough-cut an Eyescope library.",
+  "version": "0.1.3",
+  "description": "Search and rough-cut your Eyescope library. Requires the desktop app and sign-in. Local only.",
   "license": "MIT",
   "extensions": {
     "com.openai": {

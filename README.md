@@ -16,7 +16,7 @@ The Mac app icon is `icon.png`.
 
 This repository is the plugin root.
 
-- Cursor reads `.cursor-plugin/plugin.json` and `mcp.json`. The logo path is `icon.png`.
+- Cursor reads `.cursor-plugin/plugin.json`, root `mcp.json`, and `.cursor-plugin/mcp.json` (Directory scans). The logo path is `icon.png`.
 - Claude reads `.claude-plugin/plugin.json` and `.mcp.json`. Submit this repository as a plugin bundle at the Claude developer portal. Do not submit it as a remote connector.
 - Codex reads `.codex-plugin/plugin.json` and `.codex-mcp.json`. The package is desktop-only because the server is local. The public OpenAI directory accepts that package only after OpenAI allowlists the submitting organization.
 
@@ -30,4 +30,4 @@ Product site: https://eyescope.io
 
 ## Release notes
 
-**v0.1.3** — MCP tools require an Eyescope account session on the desktop app (HTTP 401 with a sign-in message until resolved). Metadata and launcher aligned with the desktop app session gate.
+**v0.1.3** — MCP tools require an Eyescope account session on the desktop app (HTTP 401 with a sign-in message until resolved). The stdio launcher forwards Streamable HTTP `mcp-session-id` so tool listing works after `initialize`. Metadata and launcher aligned with the desktop app session gate.

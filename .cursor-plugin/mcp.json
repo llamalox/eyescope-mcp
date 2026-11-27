@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "eyescope": {
+      "command": "${CURSOR_PLUGIN_ROOT}/eyescope-mcp",
+      "args": []
+    }
+  }
+}

@@ -41,6 +41,7 @@ SIGN_IN_REQUIRED = (
     "or use Sign in from the menu bar icon if the app is in the background."
 )
 PRODUCT_DIRS = ("eyescope-organizer-dev", "eyescope-organizer", "Eyescope")
+MCP_SESSION_HEADER = "mcp-session-id"
 # Cursor sends these as soon as the process starts. They must not launch EyeScope.
 QUIET_METHODS = frozenset({
     "initialize",
@@ -344,25 +345,25 @@ def _parse_response(raw: bytes, content_type: str) -> dict | None:
     return json.loads(text)
 
 
-def forward(url: str, token: str, message: dict) -> dict | None:
+def forward(url: str, token: str, message: dict, *, session_id: str | None = None) -> tuple[dict | None, str | None]:
     body = json.dumps(message).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-        },
-        method="POST",
-    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    if session_id:
+        headers[MCP_SESSION_HEADER] = session_id
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             payload = response.read()
             content_type = response.headers.get("Content-Type", "")
-            return _parse_response(payload, content_type)
+            next_session = response.headers.get(MCP_SESSION_HEADER) or session_id
+            return _parse_response(payload, content_type), next_session
     except urllib.error.HTTPError as exc:
         payload = exc.read()
+        next_session = exc.headers.get(MCP_SESSION_HEADER) if exc.headers else session_id
         try:
             parsed = json.loads(payload.decode("utf-8"))
         except json.JSONDecodeError:
@@ -381,34 +382,50 @@ def forward(url: str, token: str, message: dict) -> dict | None:
                     or msg.startswith("Sign in to Eyescope")
                 ):
                     error["message"] = SIGN_IN_REQUIRED
-        return parsed if isinstance(parsed, dict) else None
+        return (parsed if isinstance(parsed, dict) else None), next_session
 
 
-def server_icon() -> dict | None:
-    """Mac app tile returned on initialize so clients can draw the server."""
+def server_icons() -> list[dict]:
+    """Tiles returned on initialize so clients can draw the server."""
     global _SERVER_ICON, _ICON_LOADED
-    if _ICON_LOADED:
+    if _ICON_LOADED and _SERVER_ICON is not None:
         return _SERVER_ICON
     _ICON_LOADED = True
+    manifest = Path(__file__).resolve().parents[1] / "mcp" / "manifest.json"
+    version = "0.1.3"
+    try:
+        version = str(json.loads(manifest.read_text(encoding="utf-8")).get("version") or version)
+    except (OSError, json.JSONDecodeError):
+        pass
+    icons: list[dict] = [
+        {
+            "src": f"https://github.com/llamalox/eyescope-mcp/releases/download/v{version}/icon.png",
+            "mimeType": "image/png",
+        },
+    ]
     path = Path(__file__).with_name("icon.png")
     try:
         raw = path.read_bytes()
     except OSError:
-        return None
+        _SERVER_ICON = icons
+        return icons
     if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
-        return None
+        _SERVER_ICON = icons
+        return icons
     encoded = base64.standard_b64encode(raw).decode("ascii")
-    _SERVER_ICON = {
-        "src": f"data:image/png;base64,{encoded}",
-        "mimeType": "image/png",
-        "sizes": ["1024x1024"],
-    }
-    return _SERVER_ICON
+    icons.append({"src": f"data:image/png;base64,{encoded}", "mimeType": "image/png"})
+    _SERVER_ICON = icons
+    return icons
+
+
+def server_icon() -> dict | None:
+    icons = server_icons()
+    return icons[0] if icons else None
 
 
 def with_server_icon(message: dict, response: dict | None) -> dict | None:
-    icon = server_icon()
-    if response is None or icon is None or message.get("method") != "initialize":
+    icons = server_icons()
+    if response is None or not icons or message.get("method") != "initialize":
         return response
     result = response.get("result")
     if not isinstance(result, dict):
@@ -416,7 +433,8 @@ def with_server_icon(message: dict, response: dict | None) -> dict | None:
     info = result.get("serverInfo")
     if not isinstance(info, dict) or info.get("icons"):
         return response
-    info["icons"] = [icon]
+    info.setdefault("title", "Eyescope")
+    info["icons"] = server_icons()
     return response
 
 
@@ -489,6 +507,7 @@ class EngineClient:
         self.client_id = f"mcp:{os.getpid()}"
         self.name = "Agent"
         self.registered = False
+        self.mcp_session_id: str | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -635,7 +654,14 @@ def main() -> int:
             response = failure_response(message, down_message or OPEN_EYESCOPE)
         elif ready:
             try:
-                response = forward(url, token, message)
+                response, next_session = forward(
+                    url,
+                    token,
+                    message,
+                    session_id=client.mcp_session_id if client is not None else None,
+                )
+                if client is not None and next_session:
+                    client.mcp_session_id = next_session
             except Exception as exc:
                 print(f"eyescope-mcp forward failed: {exc}", file=sys.stderr)
                 response = failure_response(message, OPEN_EYESCOPE)
